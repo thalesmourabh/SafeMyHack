@@ -1,0 +1,39 @@
+name: Build & Release SafeMyHack
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set version from tag
+        run: echo "SAFEMYHACK_VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
+      - name: Build
+        run: |
+          chmod +x build.sh
+          ./build.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SafeMyHack-${{ env.SAFEMYHACK_VERSION }}
+          path: dist/SafeMyHack-v${{ env.SAFEMYHACK_VERSION }}-Intel-AMD.zip
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/SafeMyHack-v${{ env.SAFEMYHACK_VERSION }}-Intel-AMD.zip
+            dist/SafeMyHack-v${{ env.SAFEMYHACK_VERSION }}-Intel-AMD.zip.sha256
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
