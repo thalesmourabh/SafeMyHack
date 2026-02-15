@@ -1,100 +1,179 @@
-# SafeMyHack
+# SafeMyHack (Legacy Patcher — WiFi & Audio)
 
-**Legacy Patcher para Hackintosh — WiFi Broadcom + Audio**
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![macOS](https://img.shields.io/badge/macOS-Sonoma%20%7C%20Sequoia%20%7C%20Tahoe-brightgreen)](https://www.apple.com/macos/)
+[![Platform](https://img.shields.io/badge/Platform-Intel%20%7C%20AMD-orange)](https://github.com/thalesmourabh/SafeMyHack)
+[![Build](https://github.com/thalesmourabh/SafeMyHack/actions/workflows/release.yml/badge.svg)](https://github.com/thalesmourabh/SafeMyHack/actions)
 
-> 🛡️ 100% Local • Sem Telemetria • Sem API Externa • Código Aberto (GPL-3.0)
+O SafeMyHack é uma ferramenta **open-source** para ativar **WiFi Broadcom + Audio** no macOS Tahoe (26), Sequoia (15) e Sonoma (14).
+
+Funciona em Hackintoshes **Intel e AMD**, sem precisar de Xcode ou qualquer ferramenta de desenvolvimento instalada.
+
+> ⚠️ **Projeto em Desenvolvimento**: Este é um projeto da comunidade. Use por sua conta e risco.
 
 ---
 
 ## 🇧🇷 Português
 
-### O que é o SafeMyHack?
+### Por que SafeMyHack?
 
-O SafeMyHack é uma ferramenta para Hackintosh Intel/AMD que restaura o WiFi Broadcom e o Áudio em macOS **Sonoma (14)**, **Sequoia (15)** e **Tahoe (26)**.
-
-A Apple removeu o suporte às placas WiFi Broadcom (Fenvi T919, Dell DW1560, DW1820A, etc) a partir do Sonoma. O SafeMyHack resolve isso de forma segura, automática e transparente.
-
-### O que ele faz?
-
-- **Detecta seu hardware** via PCI (`ioreg`), sem depender de drivers carregados
-- **Monta a EFI dinamicamente**, identificando o disco de boot correto (NVMe, SATA, USB)
-- **Analisa o config.plist** do OpenCore e te mostra exatamente o que precisa corrigir
-- **Verifica kexts na EFI** — confirma se todas as kexts necessárias estão presentes
-- **Verifica o KDK** (Kernel Debug Kit) necessário para ativar áudio
-- **Permite carregar a Kext de áudio** que o usuário fornece
-- **Aplica Root Patches**: copia kexts da EFI → sistema, instala payloads WiFi + audio com proteção
-- **Reverte Snapshot** para receber updates delta do macOS
-
-### O que ele NÃO faz
-
-- ❌ **Não modifica** seu config.plist — ele te instrui o que corrigir
-- ❌ **Não injeta kexts** na EFI — você coloca suas kexts e faz OC Clean Snapshot no ProperTree
-- ❌ Não envia dados para nenhum servidor
-- ❌ Não requer internet para funcionar
-- ❌ Não tem telemetria, analytics, ou qualquer API externa
-
-### Requisitos
-
-| Requisito | Detalhes |
-|-----------|----------|
-| macOS | 14 (Sonoma), 15 (Sequoia) ou 26 (Tahoe) |
-| Hardware | Intel ou AMD (x86_64) |
-| WiFi | Broadcom (Fenvi T919, Dell DW1560, DW1820A, etc) |
-| SIP | Desabilitado (`csrutil authenticated-root disable` no Recovery) |
-| OpenCore | Com config.plist configurado corretamente |
-| KDK | Para ativar áudio (baixar em developer.apple.com) |
-| Xcode | **NÃO necessário** — funciona sem Xcode instalado |
+| Característica | OCLP-Mod | SafeMyHack |
+|----------------|----------|------------|
+| API Remota | ✅ SimpleHacAPI | ❌ **100% Local** |
+| Modifica config.plist | ✅ Automaticamente | ❌ **Apenas instrui** |
+| WiFi + Audio | WiFi apenas | ✅ **WiFi + Audio** |
+| Código Auditável | Parcial | ✅ **Totalmente Aberto** |
+| Compilado no GitHub | Não | ✅ **CI público** |
+| Xcode Necessário | Depende | ❌ **Não precisa** |
+| Telemetria | Desconhecido | ❌ **Zero** |
 
 ### Instalação
 
-1. Baixe o `SafeMyHack-vX.X.X-Intel-AMD.zip` na aba [Releases](../../releases)
-2. Extraia e mova `SafeMyHack.app` para `/Applications`
-3. Primeira execução:
-   - **Sonoma**: Botão direito → Abrir → Confirme
-   - **Sequoia/Tahoe**: `xattr -cr SafeMyHack.app` no Terminal
+#### Baixe e use
 
-### Como usar
+1. Vá na aba [Releases](https://github.com/thalesmourabh/SafeMyHack/releases)
+2. Baixe o arquivo `SafeMyHack-vX.X.X-Intel-AMD.zip`
+3. Extraia o `.zip` e mova `SafeMyHack.app` para `/Applications`
+4. Na primeira vez que abrir:
+
+**macOS Sonoma (14):**
+- Botão direito no app → Abrir → Confirmar "Abrir"
+
+**macOS Sequoia (15) / Tahoe (26):**
+- Abra o Terminal e execute:
+```bash
+xattr -cr /Applications/SafeMyHack.app
+```
+- Depois abra o SafeMyHack normalmente
+
+> 💡 **Alternativa para qualquer macOS:** Duplo-clique (vai bloquear) → Ajustes do Sistema → Privacidade e Segurança → "Abrir Mesmo Assim"
+
+#### Compilar do Código-Fonte (Desenvolvedores)
+
+```bash
+git clone https://github.com/thalesmourabh/SafeMyHack.git
+cd SafeMyHack
+chmod +x build.sh
+bash build.sh
+# O .zip estará em dist/
+```
+
+### Requisitos
+
+- **macOS**: Sonoma (14), Sequoia (15), ou Tahoe (26)
+- **Hardware**: Hackintosh Intel ou AMD
+- **Placa WiFi**: Broadcom compatível (Fenvi T919, Dell DW1560, DW1820A, etc)
+- **SIP**: Desabilitado (`csr-active-config=03080000`)
+- **OpenCore**: Com config.plist configurado (kexts + boot-args + blocks)
+- **KDK**: Para ativar áudio (baixar em developer.apple.com — instruções no app)
+- **Xcode**: **NÃO necessário** — funciona sem Xcode instalado
+
+### Como Funciona
+
+```
+┌─────────────────────────────────────────────────┐
+│  1. DETECÇÃO AUTOMÁTICA                         │
+│     - Detecta macOS via sw_vers                 │
+│     - Verifica SIP via csrutil                  │
+│     - Localiza e monta partição EFI             │
+│     - Identifica chipset Broadcom via PCI       │
+│     - Detecta KDK instalado                     │
+├─────────────────────────────────────────────────┤
+│  2. DIAGNÓSTICO (INFORMACIONAL)                 │
+│     - Analisa config.plist do OpenCore          │
+│     - Verifica kexts na EFI/OC/Kexts/           │
+│     - Verifica boot-args necessários            │
+│     - Verifica blocks (IOSkywalkFamily)         │
+│     - Verifica SecureBootModel                  │
+│     - ⚠️ NÃO modifica — apenas INSTRUI         │
+├─────────────────────────────────────────────────┤
+│  3. PREPARAÇÃO (feita pelo USUÁRIO)             │
+│     - Coloque suas kexts em EFI/OC/Kexts/      │
+│     - Faça OC Clean Snapshot no ProperTree      │
+│     - Corrija boot-args e blocks conforme       │
+│       instruído pelo app                        │
+├─────────────────────────────────────────────────┤
+│  4. AUDIO (Opcional)                            │
+│     - Instale o KDK (instruções no app)         │
+│     - Selecione sua kext de áudio no app        │
+├─────────────────────────────────────────────────┤
+│  5. ROOT PATCH                                  │
+│     - Copia kexts da EFI → sistema              │
+│     - Instala payloads WiFi (frameworks)        │
+│     - Instala kext de áudio (se selecionada)    │
+│     - Reconstrói kernel cache (kmutil)          │
+│     - Cria snapshot bootável (bless)            │
+│     - Requer reinício após aplicar              │
+├─────────────────────────────────────────────────┤
+│  6. REVERTER SNAPSHOT                           │
+│     - Desfaz root patches                       │
+│     - Necessário antes de atualizar macOS       │
+└─────────────────────────────────────────────────┘
+```
+
+### Como Usar (Passo a Passo)
 
 1. **Coloque suas kexts** na EFI (`AMFIPass`, `IOSkywalkFamily`, `IO80211FamilyLegacy` em `/EFI/OC/Kexts/`)
 2. **Faça OC Clean Snapshot** no ProperTree para registrar no config.plist
-3. **Abra o SafeMyHack** — ele detecta seu hardware automaticamente
+3. **Abra o SafeMyHack** — detecta hardware automaticamente
 4. **Monte a EFI** — botão na interface
-5. **Verifique o Config** — o app mostra tudo que falta com instruções claras
-6. **Corrija no ProperTree/OCAT** — se necessário, siga as instruções do app
+5. **Verifique o Config** — o app mostra o que falta com instruções claras
+6. **Corrija no ProperTree/OCAT** — siga as instruções do app
 7. **Instale o KDK** — se quiser ativar áudio (instruções no app)
-8. **Carregue a Kext de Áudio** — selecione sua kext de audio no botão do app
-9. **Root Patch** — copia kexts da EFI pro sistema, instala payloads e audio
-10. **Reinicie** — WiFi e Audio ativados
+8. **Selecione a Kext de Áudio** — clique no botão e selecione sua kext
+9. **Root Patch** — copia kexts da EFI pro sistema + instala payloads e audio
+10. **Reinicie** — WiFi e Audio ativados!
 
-### Segurança e Transparência
+### O que ele NÃO faz
 
-O SafeMyHack é **100% local**:
+- ❌ **Não modifica** seu config.plist — apenas instrui o que corrigir
+- ❌ **Não injeta kexts** na EFI — você coloca e faz OC Clean Snapshot
+- ❌ **Não envia dados** para nenhum servidor
+- ❌ **Não requer internet** para funcionar
+- ❌ **Sem telemetria**, analytics, ou qualquer API externa
 
-- Todo o código fonte está disponível neste repositório
-- Não há chamadas de rede, APIs, ou telemetria
-- Não coleta, transmite, ou armazena dados do usuário
-- O app roda inteiramente offline
-- Licença GPL-3.0 — qualquer um pode auditar, modificar e redistribuir
+### Verificação de Integridade
+
+O app é compilado pelo **GitHub Actions** — qualquer pessoa pode verificar o processo de build. Cada release inclui um arquivo `.sha256` para verificação:
+
+```bash
+# Verificar que o arquivo baixado não foi alterado
+shasum -a 256 -c SafeMyHack-v1.0.0-Intel-AMD.zip.sha256
+```
 
 ### Estrutura do Projeto
 
 ```
 SafeMyHack/
-├── SafeMyHackApp.swift          # Entry point
+├── SafeMyHackApp.swift              # Entry point
+├── Package.swift                    # Swift Package Manager
+├── build.sh                         # Build script (local + CI)
+├── .github/workflows/release.yml    # GitHub Actions CI/CD
 ├── Frontend/
-│   ├── ContentView.swift        # UI principal (Tahoe Glass)
-│   └── EFIAnalyzer.swift        # Mount EFI dinâmico
+│   ├── ContentView.swift            # Interface SwiftUI (Tahoe Glass)
+│   └── EFIAnalyzer.swift            # Detecção e mount EFI dinâmico
 ├── Helper/
-│   ├── BCMDetector.swift        # Detecção PCI via ioreg
-│   ├── ConfigAnalyzer.swift     # Análise config.plist (read-only, instrui)
-│   ├── KDKDetector.swift        # Detecção KDK + instruções
-│   ├── PayloadManager.swift     # Gerência de payloads WiFi
-│   └── RootPatcher.swift        # Root patch (EFI→sistema + payloads + audio)
+│   ├── BCMDetector.swift            # Detecção de chipset Broadcom via PCI
+│   ├── ConfigAnalyzer.swift         # Diagnóstico config.plist (read-only)
+│   ├── KDKDetector.swift            # Detecção KDK + instruções
+│   ├── PayloadManager.swift         # Gerenciamento de payloads WiFi
+│   └── RootPatcher.swift            # Root patch (EFI→sistema + audio)
 ├── Resources/
-│   └── Payloads/                # Payloads WiFi (frameworks OCLP)
-├── build.sh                     # Build script (sem Xcode dep)
-└── .github/workflows/           # CI/CD
+│   └── Payloads/                    # Frameworks WiFi (OCLP)
+├── LICENSE                          # GPL-3.0
+├── RELEASE_NOTES.md                 # Notas de release bilíngues
+└── README.md                        # Este arquivo
 ```
+
+### Segurança
+
+- 🔒 **GPL-3.0**: Forks maliciosos são forçados a manter código aberto
+- 📝 **Transparente**: Mostra tudo que vai fazer antes de agir
+- 🔄 **Recuperação**: Reverter Snapshot desfaz tudo
+- 🚫 **Sem Telemetria**: Zero comunicação externa
+- 📦 **100% Local**: Nenhuma API remota, tudo roda na sua máquina
+- ⚙️ **CI Público**: Compilado no GitHub Actions, processo 100% auditável
+- 🛡️ **Não toca no config.plist**: Suas configurações são intocáveis
 
 ---
 
@@ -102,81 +181,85 @@ SafeMyHack/
 
 ### What is SafeMyHack?
 
-SafeMyHack is a tool for Intel/AMD Hackintosh that restores Broadcom WiFi and Audio on macOS **Sonoma (14)**, **Sequoia (15)**, and **Tahoe (26)**.
+SafeMyHack is an **open-source** tool for Intel/AMD Hackintosh that restores **Broadcom WiFi + Audio** on macOS **Sonoma (14)**, **Sequoia (15)**, and **Tahoe (26)**.
 
-Apple removed Broadcom WiFi support (Fenvi T919, Dell DW1560, DW1820A, etc) starting with Sonoma. SafeMyHack fixes this safely, automatically, and transparently.
+Apple removed Broadcom WiFi support starting with Sonoma. SafeMyHack fixes this safely, transparently, and without touching your config.plist.
 
-### Features
+### Why SafeMyHack?
 
-- **Hardware detection** via PCI (`ioreg`), works without loaded drivers
-- **Dynamic EFI mount**, correctly identifies boot disk (NVMe, SATA, USB)
-- **Config.plist analysis** — shows exactly what needs fixing with clear instructions
-- **EFI kext verification** — confirms all required kexts are present
-- **KDK verification** (Kernel Debug Kit) required for audio activation
-- **Audio kext loading** — user provides their own audio kext
-- **Root Patches**: copies kexts from EFI → system, installs WiFi payloads + audio with protection
-- **Snapshot revert** for receiving delta macOS updates
-
-### What it does NOT do
-
-- ❌ Does **NOT** modify your config.plist — it instructs you
-- ❌ Does **NOT** inject kexts into EFI — you add kexts and OC Clean Snapshot in ProperTree
-- ❌ Does NOT send data to any server
-- ❌ Does NOT require internet to work
-- ❌ No telemetry, analytics, or external APIs
-
-### Requirements
-
-| Requirement | Details |
-|-------------|---------|
-| macOS | 14 (Sonoma), 15 (Sequoia) or 26 (Tahoe) |
-| Hardware | Intel or AMD (x86_64) |
-| WiFi | Broadcom (Fenvi T919, Dell DW1560, DW1820A, etc) |
-| SIP | Disabled (`csrutil authenticated-root disable` in Recovery) |
-| OpenCore | With properly configured config.plist |
-| KDK | For audio activation (download from developer.apple.com) |
-| Xcode | **NOT required** — works without Xcode installed |
+| Feature | OCLP-Mod | SafeMyHack |
+|---------|----------|------------|
+| Remote API | ✅ SimpleHacAPI | ❌ **100% Local** |
+| Modifies config.plist | ✅ Automatically | ❌ **Only instructs** |
+| WiFi + Audio | WiFi only | ✅ **WiFi + Audio** |
+| Auditable Code | Partial | ✅ **Fully Open** |
+| Built on GitHub | No | ✅ **Public CI** |
+| Xcode Required | Depends | ❌ **Not needed** |
+| Telemetry | Unknown | ❌ **Zero** |
 
 ### Installation
 
-1. Download `SafeMyHack-vX.X.X-Intel-AMD.zip` from [Releases](../../releases)
+1. Download `SafeMyHack-vX.X.X-Intel-AMD.zip` from [Releases](https://github.com/thalesmourabh/SafeMyHack/releases)
 2. Extract and move `SafeMyHack.app` to `/Applications`
 3. First run:
    - **Sonoma**: Right-click → Open → Confirm
-   - **Sequoia/Tahoe**: `xattr -cr SafeMyHack.app` in Terminal
+   - **Sequoia/Tahoe**: `xattr -cr /Applications/SafeMyHack.app` in Terminal
 
-### How to use
+### Requirements
+
+- **macOS**: Sonoma (14), Sequoia (15), or Tahoe (26)
+- **Hardware**: Intel or AMD Hackintosh (x86_64)
+- **WiFi**: Broadcom card (Fenvi T919, Dell DW1560, DW1820A, etc)
+- **SIP**: Disabled (`csr-active-config=03080000`)
+- **OpenCore**: With configured config.plist (kexts + boot-args + blocks)
+- **KDK**: For audio activation (download from developer.apple.com — instructions in app)
+- **Xcode**: **NOT required**
+
+### How to Use
 
 1. **Place your kexts** in EFI (`AMFIPass`, `IOSkywalkFamily`, `IO80211FamilyLegacy` in `/EFI/OC/Kexts/`)
 2. **OC Clean Snapshot** in ProperTree to register in config.plist
 3. **Open SafeMyHack** — auto-detects your hardware
 4. **Mount EFI** — button in the UI
 5. **Check Config** — app shows what's missing with clear instructions
-6. **Fix in ProperTree/OCAT** — if needed, follow the app's instructions
+6. **Fix in ProperTree/OCAT** — follow the app's instructions
 7. **Install KDK** — for audio activation (instructions in app)
-8. **Load Audio Kext** — select your audio kext via the app button
-9. **Root Patch** — copies kexts from EFI to system, installs payloads and audio
-10. **Reboot** — WiFi and Audio activated
+8. **Select Audio Kext** — click button and select your audio kext
+9. **Root Patch** — copies kexts from EFI to system + installs payloads and audio
+10. **Reboot** — WiFi and Audio activated!
 
-### Security & Transparency
+### What it does NOT do
 
-SafeMyHack is **100% local**:
+- ❌ Does **NOT** modify your config.plist — only instructs you
+- ❌ Does **NOT** inject kexts into EFI — you add them and OC Clean Snapshot
+- ❌ Does **NOT** send data to any server
+- ❌ Does **NOT** require internet to work
+- ❌ **No telemetry**, analytics, or external APIs
 
-- Full source code available in this repository
-- No network calls, APIs, or telemetry
-- Does not collect, transmit, or store user data
-- Runs entirely offline
-- GPL-3.0 License — anyone can audit, modify, and redistribute
+### Security
+
+- 🔒 **GPL-3.0**: Malicious forks must keep code open
+- 📝 **Transparent**: Shows everything before acting
+- 🔄 **Recovery**: Revert Snapshot undoes everything
+- 🚫 **No Telemetry**: Zero external communication
+- 📦 **100% Local**: No remote APIs, runs entirely on your machine
+- ⚙️ **Public CI**: Built on GitHub Actions, fully auditable
+- 🛡️ **Config-safe**: Never touches your config.plist
 
 ---
 
-## License
+## Créditos / Credits
 
-This project is licensed under the [GNU General Public License v3.0](LICENSE).
-
-## Credits
-
-- [OCLP](https://github.com/dortania/OpenCore-Legacy-Patcher) — Modern Wireless patch logic
+- [OCLP](https://github.com/dortania/OpenCore-Legacy-Patcher) — Modern Wireless patch logic & payloads
 - [OpenCore](https://github.com/acidanthera/OpenCorePkg) — Bootloader
+- [Acidanthera](https://github.com/acidanthera) — Kexts essenciais
 - Gabriel Luchina — Feedback e testes na live
 - Comunidade Hackintosh BR
+
+## Licença / License
+
+[GPL-3.0](LICENSE) — Código deve permanecer aberto / Code must remain open.
+
+---
+
+**Feito com ❤️ para a comunidade Hackintosh brasileira**

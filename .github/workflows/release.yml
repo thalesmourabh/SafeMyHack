@@ -5,35 +5,109 @@ on:
     tags:
       - 'v*'
 
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (ex: 1.0.0)'
+        required: true
+        default: '1.0.0'
+
 jobs:
   build:
+    name: Build SafeMyHack (x86_64)
     runs-on: macos-14
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set version from tag
-        run: echo "SAFEMYHACK_VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+      - name: Set version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "SAFEMYHACK_VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          else
+            TAG="${GITHUB_REF#refs/tags/v}"
+            echo "SAFEMYHACK_VERSION=$TAG" >> $GITHUB_ENV
+          fi
 
-      - name: Build
+      - name: Show build info
+        run: |
+          echo "Version: $SAFEMYHACK_VERSION"
+          echo "macOS: $(sw_vers -productVersion)"
+          echo "Swift: $(swift --version | head -1)"
+          echo "Xcode: $(xcodebuild -version | head -1)"
+
+      - name: Build SafeMyHack
         run: |
           chmod +x build.sh
-          ./build.sh
+          bash build.sh
+
+      - name: Verify build
+        run: |
+          APP="dist/SafeMyHack.app/Contents/MacOS/SafeMyHack"
+          echo "=== Architecture ==="
+          file "$APP"
+          echo "=== Rpaths ==="
+          otool -l "$APP" | grep -A2 LC_RPATH | grep path || echo "None"
+          echo "=== Dependencies ==="
+          otool -L "$APP" | tail -n +2
+          echo "=== Signature ==="
+          codesign -dvv "dist/SafeMyHack.app" 2>&1 || true
+          if otool -l "$APP" | grep -A2 LC_RPATH | grep -qi "Xcode"; then
+            echo "FATAL: Xcode rpath found!"
+            exit 1
+          fi
+          echo "Build verified - no Xcode dependencies"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SafeMyHack-${{ env.SAFEMYHACK_VERSION }}
+          name: SafeMyHack-v${{ env.SAFEMYHACK_VERSION }}-Intel-AMD
           path: dist/SafeMyHack-v${{ env.SAFEMYHACK_VERSION }}-Intel-AMD.zip
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Set version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          echo "SAFEMYHACK_VERSION=$TAG" >> $GITHUB_ENV
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SafeMyHack-v${{ env.SAFEMYHACK_VERSION }}-Intel-AMD
+
+      - name: Download release notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      - name: Generate SHA256
+        run: |
+          sha256sum SafeMyHack-v${{ env.SAFEMYHACK_VERSION }}-Intel-AMD.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/SafeMyHack-v${{ env.SAFEMYHACK_VERSION }}-Intel-AMD.zip
-            dist/SafeMyHack-v${{ env.SAFEMYHACK_VERSION }}-Intel-AMD.zip.sha256
-          body_path: RELEASE_NOTES.md
+          tag_name: v${{ env.SAFEMYHACK_VERSION }}
+          name: SafeMyHack v${{ env.SAFEMYHACK_VERSION }}
           draft: false
           prerelease: false
+          body_path: RELEASE_NOTES.md
+          files: |
+            SafeMyHack-v${{ env.SAFEMYHACK_VERSION }}-Intel-AMD.zip
+            SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
