@@ -57,9 +57,9 @@ struct ContentView: View {
         sipStatus.contains("Disabled") && efiMounted && payloadsReady && (configDiag?.isReady ?? false)
     }
     
-    /// Audio só libera quando KDK está instalado e compatível
+    /// Audio só libera quando KDK está instalado, compatível e válido
     var canAudio: Bool {
-        if let kdk = kdkInfo { return kdk.installed && kdk.matchesOS }
+        if let kdk = kdkInfo { return kdk.installed && kdk.matchesOS && kdk.isValid }
         return false
     }
 
@@ -238,13 +238,17 @@ struct ContentView: View {
             Divider()
             
             if let kdk = kdkInfo {
-                StatusRow(label: "KDK:", value: kdk.installed ? (kdk.version ?? "Instalado") : "Não encontrado",
+                StatusRow(label: "KDK:", value: kdk.installed ? "\(kdk.version ?? "?") (\(kdk.build ?? "?"))" : "Não encontrado",
                           color: kdk.installed ? .green : .red, icon: "wrench.and.screwdriver")
-                StatusRow(label: "macOS:", value: kdk.osVersion,
+                StatusRow(label: "macOS:", value: "\(kdk.osVersion) (Build \(kdk.osBuild))",
                           color: .primary, icon: "desktopcomputer")
                 
-                if kdk.installed && kdk.matchesOS {
-                    StatusRow(label: "Compatível:", value: "Sim", color: .green, icon: "checkmark.circle")
+                if kdk.installed && kdk.matchesOS && kdk.isValid {
+                    if kdk.exactMatch {
+                        StatusRow(label: "Match:", value: "Exato por build ✓", color: .green, icon: "checkmark.circle")
+                    } else {
+                        StatusRow(label: "Match:", value: "Aproximado (versão próxima)", color: .orange, icon: "checkmark.circle")
+                    }
                     
                     // Toggle audio
                     Toggle(isOn: $includeAudio) {
@@ -268,9 +272,19 @@ struct ContentView: View {
                     }
 
                 } else if kdk.installed && !kdk.matchesOS {
-                    Text("KDK instalado não corresponde ao macOS \(kdk.osVersion)")
+                    Text("KDK instalado não corresponde ao macOS \(kdk.osVersion) (Build \(kdk.osBuild))")
                         .font(.caption).foregroundColor(.orange)
-                    Text("Baixe o KDK correto para sua versão.")
+                    Text("Baixe o KDK correto para seu build.")
+                        .font(.caption2).foregroundColor(.secondary)
+                    
+                    Button(action: { showKDKInstructions.toggle() }) {
+                        Label("Ver instruções", systemImage: "questionmark.circle")
+                            .font(.caption)
+                    }.buttonStyle(.bordered).controlSize(.small)
+                } else if kdk.installed && !kdk.isValid {
+                    Text("KDK corrompido — arquivos críticos ausentes")
+                        .font(.caption).foregroundColor(.red)
+                    Text("Reinstale o KDK via developer.apple.com")
                         .font(.caption2).foregroundColor(.secondary)
                     
                     Button(action: { showKDKInstructions.toggle() }) {

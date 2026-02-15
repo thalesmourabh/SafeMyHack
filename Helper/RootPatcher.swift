@@ -1,9 +1,18 @@
 import Foundation
 
 /// RootPatcher: Root patch para WiFi BCM + Audio no macOS Sonoma/Sequoia/Tahoe
-/// Copia kexts da EFI do usuário → /System/Library/Extensions/
-/// Instala payloads WiFi (frameworks/binários) + kext de áudio fornecida pelo usuário
-/// NÃO modifica config.plist nem copia kexts PARA a EFI
+///
+/// Fluxo baseado no OCLP-Mod (sys_patch.py + kdk_merge.py):
+/// 1. Monta volume do sistema (mount_apfs)
+/// 2. Copia kexts da EFI → /System/Library/Extensions/
+/// 3. Instala payloads WiFi (frameworks bundled no app)
+/// 4. [AUDIO] Merge KDK → root (rsync Extensions do KDK pro sistema)
+/// 5. [AUDIO] Instala kext de áudio do usuário
+/// 6. Reconstrói kernel cache (kmutil install --update-all --force)
+/// 7. Cria snapshot bootável (bless --create-snapshot)
+///
+/// WiFi NÃO precisa de KDK. Audio PRECISA de KDK.
+/// NÃO modifica config.plist nem copia kexts PARA a EFI.
 class RootPatcher {
     
     struct PatchResult {
@@ -27,7 +36,7 @@ class RootPatcher {
             issues.append("EFI não montada")
         }
         
-        // Verificar kexts WiFi na EFI do usuário (serão copiadas pro sistema)
+        // Kexts WiFi na EFI (serão copiadas pro sistema)
         let efiKexts = "/Volumes/EFI/EFI/OC/Kexts"
         for kext in ["IO80211FamilyLegacy.kext", "IOSkywalkFamily.kext"] {
             if !FileManager.default.fileExists(atPath: "\(efiKexts)/\(kext)") {
@@ -38,11 +47,17 @@ class RootPatcher {
         if !PayloadManager.arePayloadsBundled() {
             issues.append("Payloads WiFi não encontrados no app")
         }
-
+        
+        // Audio precisa de KDK + kext selecionada
         if includeAudio {
             let kdk = KDKDetector.detect()
-            if !kdk.installed { issues.append("KDK não instalado (necessário para áudio)") }
-            else if !kdk.matchesOS { issues.append("KDK não corresponde ao macOS atual") }
+            if !kdk.installed {
+                issues.append("KDK não instalado (necessário para áudio)")
+            } else if !kdk.matchesOS {
+                issues.append("KDK não corresponde ao macOS \(kdk.osVersion) (Build \(kdk.osBuild))")
+            } else if !kdk.isValid {
+                issues.append("KDK corrompido — reinstale via developer.apple.com")
+            }
             
             if let path = audioKextPath {
                 if !FileManager.default.fileExists(atPath: path) {
@@ -63,13 +78,10 @@ class RootPatcher {
         
         logs.append("[\(ts())] ════════════════════════════════════════════")
         logs.append("[\(ts())] SafeMyHack — Root Patcher")
-        logs.append("[\(ts())] WiFi Payloads: ✓  |  Audio: \(includeAudio ? "✓" : "—")")
+        logs.append("[\(ts())] WiFi: ✓  |  Audio: \(includeAudio ? "✓" : "—")")
+        if includeAudio { logs.append("[\(ts())] WiFi NÃO precisa de KDK. Audio PRECISA.") }
         logs.append("[\(ts())] ════════════════════════════════════════════")
-        logs.append("")
-        logs.append("[\(ts())] NOTA: Kexts do OpenCore são injetadas pela EFI.")
-        logs.append("[\(ts())] Este patcher só instala frameworks/binários do sistema.")
-        if includeAudio { logs.append("[\(ts())] + Kext de áudio fornecida pelo usuário.") }
-
+        
         // Step 1: Requirements
         logs.append(""); logs.append("[\(ts())] [1/4] Verificando requisitos...")
         let (ready, issues) = checkRequirements(includeAudio: includeAudio, audioKextPath: audioKextPath)
@@ -97,31 +109,50 @@ class RootPatcher {
             return PatchResult(success: false, logs: logs, requiresRestart: false)
         }
         logs.append("[\(ts())]   ✓ Volume: \(systemDevice)")
+        
+        // KDK path (só para audio)
+        var kdkPath: String? = nil
+        if includeAudio {
+            let kdk = KDKDetector.detect()
+            kdkPath = kdk.path
+            logs.append("[\(ts())]   ✓ KDK: \(kdk.version ?? "?") (Build \(kdk.build ?? "?"))")
+            if kdk.exactMatch { logs.append("[\(ts())]     Match exato por build ✓") }
+            else { logs.append("[\(ts())]     Match aproximado (versão próxima)") }
+        }
 
         // Dry run
         if dryRun {
             logs.append(""); logs.append("[\(ts())] ═══════ SIMULAÇÃO ═══════")
-            logs.append("[\(ts())] 1. mount_apfs \(systemDevice) \(systemMountPoint)")
-            logs.append("[\(ts())] 2. Copiar kexts da EFI → /System/Library/Extensions/")
+            var step = 1
+            logs.append("[\(ts())] \(step). mount_apfs \(systemDevice) \(systemMountPoint)"); step += 1
+            logs.append("[\(ts())] \(step). Copiar kexts da EFI → /System/Library/Extensions/"); step += 1
             logs.append("[\(ts())]    → IO80211FamilyLegacy.kext")
             logs.append("[\(ts())]    → IOSkywalkFamily.kext")
-            logs.append("[\(ts())] 3. Instalar payloads WiFi (frameworks do sistema):")
+            logs.append("[\(ts())] \(step). Instalar payloads WiFi (frameworks):"); step += 1
             for p in PayloadManager.getWiFiPayloadFiles() {
                 logs.append("[\(ts())]    → \(p.destPath)")
             }
-            if includeAudio, let path = audioKextPath {
-                logs.append("[\(ts())] 4. Instalar kext de áudio fornecida pelo usuário:")
-                logs.append("[\(ts())]    → \((path as NSString).lastPathComponent)")
+            if includeAudio, let kp = kdkPath {
+                logs.append("[\(ts())] \(step). Merge KDK → root (rsync Extensions)"); step += 1
+                logs.append("[\(ts())]    → rsync \(kp)/System/Library/Extensions/ → sistema")
             }
-            let nextStep = includeAudio ? "5" : "4"
-            logs.append("[\(ts())] \(nextStep). kmutil install --update-all --force")
-            logs.append("[\(ts())] \(includeAudio ? "6" : "5"). bless --create-snapshot")
+            if includeAudio, let ap = audioKextPath {
+                logs.append("[\(ts())] \(step). Instalar kext de áudio:"); step += 1
+                logs.append("[\(ts())]    → \((ap as NSString).lastPathComponent)")
+            }
+            logs.append("[\(ts())] \(step). kmutil install --update-all --force"); step += 1
+            logs.append("[\(ts())] \(step). bless --create-snapshot")
             return PatchResult(success: true, logs: logs, requiresRestart: false)
         }
         
         // Step 4: Execute
         logs.append(""); logs.append("[\(ts())] [4/4] Aplicando patches...")
-        let script = buildPatchScript(systemDevice: systemDevice, includeAudio: includeAudio, audioKextPath: audioKextPath)
+        let script = buildPatchScript(
+            systemDevice: systemDevice,
+            includeAudio: includeAudio,
+            audioKextPath: audioKextPath,
+            kdkPath: kdkPath
+        )
         let result = runScriptWithAdmin(script)
         
         if !result.success {
@@ -144,10 +175,20 @@ class RootPatcher {
         return PatchResult(success: true, logs: logs, requiresRestart: true)
     }
 
-    // MARK: - Build Script (só payloads WiFi + audio kext do usuário)
+
+    // MARK: - Build Script
+    // Fluxo baseado no OCLP-Mod:
+    // 1. mount_apfs → root
+    // 2. Copiar kexts WiFi da EFI → /S/L/E
+    // 3. Instalar payloads WiFi (frameworks bundled)
+    // 4. [AUDIO] rsync KDK/System/Library/Extensions → root (igual kdk_merge.py)
+    // 5. [AUDIO] Copiar kext de áudio do usuário → /S/L/E
+    // 6. kmutil install --update-all --force
+    // 7. bless --create-snapshot
     
-    private static func buildPatchScript(systemDevice: String, includeAudio: Bool, audioKextPath: String?) -> String {
-        // Payloads WiFi: frameworks e binários do sistema
+    private static func buildPatchScript(systemDevice: String, includeAudio: Bool, audioKextPath: String?, kdkPath: String?) -> String {
+        
+        // --- Payloads WiFi ---
         var payloadInstalls = ""
         for payload in PayloadManager.getWiFiPayloadFiles() {
             payloadInstalls += """
@@ -164,8 +205,37 @@ class RootPatcher {
             fi
             """
         }
-        
-        // Audio: kext fornecida pelo usuário
+
+        // --- KDK Merge (APENAS para audio) ---
+        // Igual OCLP-Mod kdk_merge.py → _merge_kdk():
+        // rsync -r -i -a {kdk}/System/Library/Extensions/ → {root}/System/Library/Extensions
+        // Isso fornece os symbols que o kmutil precisa para reconstruir o kernel cache
+        var kdkMerge = ""
+        if includeAudio, let kp = kdkPath {
+            kdkMerge = """
+            
+            echo ""
+            echo "Merging KDK com root volume (símbolos para kmutil)..."
+            KDK_SLE="\(kp)/System/Library/Extensions"
+            if [ -d "$KDK_SLE" ]; then
+                # Verificar integridade mínima do KDK
+                if [ ! -f "$KDK_SLE/System.kext/PlugIns/Libkern.kext/Libkern" ]; then
+                    echo "ERRO: KDK corrompido — Libkern ausente"
+                    diskutil unmount "$MOUNT_POINT" 2>/dev/null || umount "$MOUNT_POINT" 2>/dev/null || true
+                    exit 1
+                fi
+                # rsync só /System/Library/Extensions (não precisa de Kernels nem KernelSupport)
+                rsync -r -a "$KDK_SLE/" "$MOUNT_POINT/System/Library/Extensions"
+                echo "✓ KDK merged com root"
+            else
+                echo "ERRO: KDK Extensions não encontrado em \(kp)"
+                diskutil unmount "$MOUNT_POINT" 2>/dev/null || umount "$MOUNT_POINT" 2>/dev/null || true
+                exit 1
+            fi
+            """
+        }
+
+        // --- Audio kext do usuário ---
         var audioInstall = ""
         if includeAudio, let audioPath = audioKextPath {
             let kextName = (audioPath as NSString).lastPathComponent
@@ -181,11 +251,13 @@ class RootPatcher {
                 echo "✓ \(kextName) (audio)"
             else
                 echo "ERRO: Kext de áudio não encontrada em \(audioPath)"
+                diskutil unmount "$MOUNT_POINT" 2>/dev/null || umount "$MOUNT_POINT" 2>/dev/null || true
                 exit 1
             fi
             """
         }
 
+        // --- Script principal ---
         return """
         #!/bin/bash
         
@@ -228,6 +300,7 @@ class RootPatcher {
         echo ""
         echo "Instalando payloads WiFi..."
         \(payloadInstalls)
+        \(kdkMerge)
         \(audioInstall)
         
         echo ""
@@ -277,12 +350,18 @@ class RootPatcher {
         let escaped = script.replacingOccurrences(of: "\\", with: "\\\\")
                             .replacingOccurrences(of: "\"", with: "\\\"")
         let appleScript = "do shell script \"\(escaped)\" with administrator privileges"
-        let p = Process(); p.launchPath = "/usr/bin/osascript"; p.arguments = ["-e", appleScript]
-        let pipe = Pipe(); p.standardOutput = pipe; p.standardError = pipe
+        let p = Process()
+        p.launchPath = "/usr/bin/osascript"
+        p.arguments = ["-e", appleScript]
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = pipe
         do {
             try p.run(); p.waitUntilExit()
             let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
             return (p.terminationStatus == 0, out)
-        } catch { return (false, error.localizedDescription) }
+        } catch {
+            return (false, error.localizedDescription)
+        }
     }
 }
