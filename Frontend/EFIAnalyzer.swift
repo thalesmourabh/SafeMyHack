@@ -62,21 +62,47 @@ class EFIAnalyzer {
             return MountResult(success: false, message: "Partição EFI não encontrada")
         }
         
-        // Method 1: diskutil mount
-        let script1 = "do shell script \"diskutil mount \(efiDisk)\" with administrator privileges"
-        let r1 = runOsascript(script1)
-        if r1.success && isEFIMounted() {
+        // Script único com fallback — UMA só senha
+        let script = """
+        do shell script "
+        # Método 1: diskutil mount (padrão)
+        diskutil mount /dev/\(efiDisk) 2>/dev/null && exit 0
+        diskutil mount \(efiDisk) 2>/dev/null && exit 0
+        # Método 2: mount_msdos (fallback)
+        mkdir -p /Volumes/EFI
+        mount_msdos /dev/\(efiDisk) /Volumes/EFI 2>/dev/null && exit 0
+        # Método 3: mount -t msdos
+        mount -t msdos /dev/\(efiDisk) /Volumes/EFI 2>/dev/null && exit 0
+        exit 1
+        " with administrator privileges
+        """
+        
+        let result = runOsascript(script)
+        
+        // Verificar se montou (pode montar com nome diferente de "EFI")
+        if isEFIMounted() {
             return MountResult(success: true, message: "EFI montada (\(efiDisk))")
         }
         
-        // Method 2: mount_msdos fallback
-        let script2 = "do shell script \"mkdir -p /Volumes/EFI && mount_msdos /dev/\(efiDisk) /Volumes/EFI\" with administrator privileges"
-        let r2 = runOsascript(script2)
-        if r2.success && isEFIMounted() {
-            return MountResult(success: true, message: "EFI montada via mount_msdos (\(efiDisk))")
+        // Checar se montou com outro nome
+        let checkOutput = runCmd("/usr/sbin/diskutil", args: ["info", efiDisk])
+        for line in checkOutput.components(separatedBy: "\n") {
+            if line.contains("Mount Point:") {
+                let mountPoint = line.replacingOccurrences(of: "Mount Point:", with: "").trimmingCharacters(in: .whitespaces)
+                if !mountPoint.isEmpty && mountPoint != "(not mounted)" {
+                    // Montou mas com outro nome — verificar se tem OC
+                    if FileManager.default.fileExists(atPath: "\(mountPoint)/EFI/OC/config.plist") {
+                        return MountResult(success: true, message: "EFI montada em \(mountPoint) (\(efiDisk))")
+                    }
+                }
+            }
         }
         
-        return MountResult(success: false, message: "Falha ao montar EFI (\(efiDisk))")
+        if result.success {
+            return MountResult(success: false, message: "EFI montada mas config.plist não encontrado em /Volumes/EFI/EFI/OC/")
+        }
+        
+        return MountResult(success: false, message: "Falha ao montar EFI (\(efiDisk)). Tente manualmente: sudo diskutil mount /dev/\(efiDisk)")
     }
     
     // MARK: - Revert Snapshot
