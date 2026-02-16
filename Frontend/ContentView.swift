@@ -494,10 +494,11 @@ struct ContentView: View {
     func selectAudioKext() {
         let panel = NSOpenPanel()
         panel.title = "Selecione a Kext de Áudio"
-        panel.canChooseFiles = false
+        panel.canChooseFiles = true          // .kext é package (como .app), precisa de canChooseFiles
         panel.canChooseDirectories = true
+        panel.treatsFilePackagesAsDirectories = false  // Não navegar DENTRO do .kext
         panel.allowedContentTypes = []
-        panel.message = "Selecione a pasta da kext de áudio (ex: AppleALC.kext ou AppleHDA.kext)"
+        panel.message = "Selecione a kext de áudio (ex: AppleALC.kext ou AppleHDA.kext)"
         panel.directoryURL = URL(fileURLWithPath: "/Volumes/EFI/EFI/OC/Kexts")
         
         if panel.runModal() == .OK, let url = panel.url {

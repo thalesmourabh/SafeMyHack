@@ -24,7 +24,6 @@ class ConfigAnalyzer {
         "AMFIPass.kext",
         "IOSkywalkFamily.kext",
         "IO80211FamilyLegacy.kext",
-        "IO80211FamilyLegacy.kext/Contents/PlugIns/AirPortBrcm4360.kext"
     ]
 
     // MARK: - Diagnostic
